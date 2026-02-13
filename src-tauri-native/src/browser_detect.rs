@@ -4,6 +4,8 @@ pub struct BrowserInfo {
     /// "chrome" or "chromium", used as data directory name
     pub name: String,
     pub path: PathBuf,
+    /// Whether the browser is installed via snap (Linux only)
+    pub is_snap: bool,
 }
 
 #[cfg(target_os = "macos")]
@@ -15,7 +17,7 @@ pub fn detect_browser() -> Option<BrowserInfo> {
     for (name, path_str) in &candidates {
         let path = PathBuf::from(path_str);
         if path.exists() {
-            return Some(BrowserInfo { name: name.to_string(), path });
+            return Some(BrowserInfo { name: name.to_string(), path, is_snap: false });
         }
     }
     // Also check ~/Applications
@@ -27,7 +29,7 @@ pub fn detect_browser() -> Option<BrowserInfo> {
         ];
         for (name, path) in &user_candidates {
             if path.exists() {
-                return Some(BrowserInfo { name: name.to_string(), path: path.clone() });
+                return Some(BrowserInfo { name: name.to_string(), path: path.clone(), is_snap: false });
             }
         }
     }
@@ -43,7 +45,7 @@ pub fn detect_browser() -> Option<BrowserInfo> {
         if let Ok(path) = hklm.get_value::<String, _>("") {
             let p = PathBuf::from(&path);
             if p.exists() {
-                return Some(BrowserInfo { name: "chrome".to_string(), path: p });
+                return Some(BrowserInfo { name: "chrome".to_string(), path: p, is_snap: false });
             }
         }
     }
@@ -65,7 +67,7 @@ pub fn detect_browser() -> Option<BrowserInfo> {
             }
             let candidate = PathBuf::from(base).join(rel);
             if candidate.exists() {
-                return Some(BrowserInfo { name: name.to_string(), path: candidate });
+                return Some(BrowserInfo { name: name.to_string(), path: candidate, is_snap: false });
             }
         }
     }
@@ -82,7 +84,8 @@ pub fn detect_browser() -> Option<BrowserInfo> {
     for (name, bins) in &candidates {
         for bin in *bins {
             if let Ok(path) = which::which(bin) {
-                return Some(BrowserInfo { name: name.to_string(), path });
+                let is_snap = path.starts_with("/snap/");
+                return Some(BrowserInfo { name: name.to_string(), path, is_snap });
             }
         }
     }

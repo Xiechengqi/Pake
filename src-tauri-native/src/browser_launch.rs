@@ -4,13 +4,25 @@ use std::process::{Command, ExitStatus};
 use crate::browser_detect::BrowserInfo;
 use crate::config::NativeBrowserConfig;
 
-fn get_data_dir(config: &NativeBrowserConfig, browser_name: &str) -> PathBuf {
+fn get_data_dir(config: &NativeBrowserConfig, browser: &BrowserInfo) -> PathBuf {
+    // Snap-packaged browsers can only write to ~/snap/<name>/common/
+    if browser.is_snap {
+        if let Some(home) = dirs::home_dir() {
+            // e.g. ~/snap/chromium/common/pake/XiaoHongShu
+            return home
+                .join("snap")
+                .join(&browser.name)
+                .join("common")
+                .join("pake")
+                .join(&config.app_name);
+        }
+    }
     let config_dir = dirs::config_dir().expect("Failed to resolve config directory");
-    config_dir.join(&config.app_name).join(browser_name)
+    config_dir.join(&config.app_name).join(&browser.name)
 }
 
 pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus {
-    let data_dir = get_data_dir(config, &browser.name);
+    let data_dir = get_data_dir(config, browser);
     std::fs::create_dir_all(&data_dir).expect("Failed to create browser data directory");
 
     let window_size = format!("--window-size={},{}", config.width, config.height);
