@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::process::{Command, ExitStatus};
+use std::process::{Command, ExitStatus, Stdio};
 
 use crate::browser_detect::BrowserInfo;
 use crate::config::NativeBrowserConfig;
@@ -48,6 +48,10 @@ pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus
         .arg(&window_size)
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
+        .arg("--disable-features=MediaRouter")
+        .arg("--disable-background-networking")
+        .arg("--disable-logging")
+        .arg("--log-level=3")
         .arg(format!(
             "--load-extension={}",
             extension::ensure_extension(&data_dir).display()
@@ -75,6 +79,7 @@ pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus
     }
 
     let mut child = cmd
+        .stderr(Stdio::null())
         .spawn()
         .unwrap_or_else(|e| panic!("Failed to launch {}: {}", browser.name, e));
 
