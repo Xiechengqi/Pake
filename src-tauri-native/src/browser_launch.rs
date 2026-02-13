@@ -36,6 +36,7 @@ pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus
         .arg("--disable-extensions");
 
     // Running as root on Linux requires --no-sandbox
+    // Auto-detect Wayland vs X11 display server
     #[cfg(target_os = "linux")]
     {
         let is_root = std::fs::read_to_string("/proc/self/status")
@@ -48,6 +49,10 @@ pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus
             .unwrap_or(false);
         if is_root {
             cmd.arg("--no-sandbox");
+        }
+
+        if std::env::var("WAYLAND_DISPLAY").is_ok() {
+            cmd.arg("--ozone-platform=wayland");
         }
     }
 
