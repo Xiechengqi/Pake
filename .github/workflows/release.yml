@@ -2,124 +2,196 @@ name: Release & Publish
 
 on:
   push:
-    tags:
-      - "V*"
+    branches:
+      - main
+    paths:
+      - 'src-tauri-native/**'
   workflow_dispatch:
     inputs:
-      release_apps:
-        description: "Build popular apps"
-        type: boolean
-        default: false
-      publish_docker:
-        description: "Publish Docker image"
+      build_native:
+        description: "Build pake-native (all platforms)"
         type: boolean
         default: false
 
-env:
-  NODE_VERSION: "22"
-  PNPM_VERSION: "10.26.2"
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+permissions:
+  contents: write
 
 jobs:
-  # Build and release popular apps
-  release-apps:
-    if: |
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.release_apps)
-    runs-on: ubuntu-latest
-    outputs:
-      apps_name: ${{ steps.read-apps-config.outputs.apps_name }}
-      apps_config: ${{ steps.read-apps-config.outputs.apps_config }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Get Apps Config
-        id: read-apps-config
-        run: |
-          echo "apps_name=$(jq -c '[.[] | .name]' default_app_list.json)" >> $GITHUB_OUTPUT
-          echo "apps_config=$(jq -c '.' default_app_list.json)" >> $GITHUB_OUTPUT
-
-  build-cli:
-    name: Build CLI
-    needs: release-apps
-    if: needs.release-apps.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js Environment
-        uses: ./.github/actions/setup-env
-        with:
-          mode: 'node'
-
-      - name: Build CLI
-        run: pnpm run cli:build
-
-      - name: Upload CLI Artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: pake-cli-dist
-          path: dist/
-          retention-days: 1
-
-  build-popular-apps:
-    name: ${{ matrix.config.title }}
-    needs: [release-apps, build-cli]
-    if: needs.release-apps.result == 'success' && needs.build-cli.result == 'success'
+  build-native-linux:
+    if: >-
+      (github.event_name == 'push') ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_native)
     strategy:
+      fail-fast: false
       matrix:
-        config: ${{ fromJSON(needs.release-apps.outputs.apps_config) }}
-    uses: ./.github/workflows/single-app.yaml
-    with:
-      name: ${{ matrix.config.name }}
-      title: ${{ matrix.config.title }}
-      name_zh: ${{ matrix.config.name_zh }}
-      url: ${{ matrix.config.url }}
-      icon: ${{ matrix.config.icon }}
-
-  # Publish Docker image (runs in parallel with app builds)
-  publish-docker:
-    if: |
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish_docker)
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      packages: write
+        include:
+          - target: x86_64-unknown-linux-gnu
+            asset: pake-native-linux-amd64
+          - target: aarch64-unknown-linux-gnu
+            asset: pake-native-linux-arm64
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container registry
-        uses: docker/login-action@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=tag
-            type=sha
+          targets: ${{ matrix.target }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+      - name: Install cross-compilation tools (ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Create build config
+        run: |
+          mkdir -p src-tauri-native/.pake
+          echo '{"url":"https://example.com","app_name":"PakeNative","width":1200,"height":780}' > src-tauri-native/.pake/native_config.json
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          fi
+          cargo build --release --manifest-path src-tauri-native/Cargo.toml --target ${{ matrix.target }}
+
+      - name: Prepare release asset
+        run: |
+          cp src-tauri-native/target/${{ matrix.target }}/release/pake-native ${{ matrix.asset }}
+          chmod +x ${{ matrix.asset }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  build-native-extras:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_native
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset: pake-native-macos-arm64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset: pake-native-macos-amd64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: pake-native-windows-amd64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Create build config
+        shell: bash
+        run: |
+          mkdir -p src-tauri-native/.pake
+          echo '{"url":"https://example.com","app_name":"PakeNative","width":1200,"height":780}' > src-tauri-native/.pake/native_config.json
+
+      - name: Build
+        shell: bash
+        run: cargo build --release --manifest-path src-tauri-native/Cargo.toml --target ${{ matrix.target }}
+
+      - name: Prepare release asset
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp src-tauri-native/target/${{ matrix.target }}/release/pake-native.exe ${{ matrix.asset }}
+          else
+            cp src-tauri-native/target/${{ matrix.target }}/release/pake-native ${{ matrix.asset }}
+            chmod +x ${{ matrix.asset }}
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release-native:
+    needs: [build-native-linux, build-native-extras]
+    if: always() && needs.build-native-linux.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pake-native-*
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -exec cp {} release-files/ \;
+          ls -lh release-files/
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep '^version = ' src-tauri-native/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Delete existing native-latest release
+        run: |
+          gh release delete native-latest --yes || true
+          git push origin :refs/tags/native-latest || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f native-latest
+          git push -f origin native-latest
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: native-latest
+          name: "Pake Native v${{ steps.version.outputs.version }}"
+          body: |
+            ## Pake Native Browser Build
+
+            **Version**: ${{ steps.version.outputs.version }}
+            **Commit**: ${{ github.sha }}
+            **Build time**: ${{ github.event.head_commit.timestamp }}
+
+            ### Changes
+
+            ${{ github.event.head_commit.message }}
+
+            ---
+
+            ### Downloads
+
+            > Linux builds are always included. macOS/Windows builds are only available when manually triggered with "Build pake-native (all platforms)" enabled.
+
+            | Platform | File |
+            |----------|------|
+            | Linux AMD64 | `pake-native-linux-amd64` |
+            | Linux ARM64 | `pake-native-linux-arm64` |
+            | macOS ARM64 (Apple Silicon) | `pake-native-macos-arm64` |
+            | macOS AMD64 (Intel) | `pake-native-macos-amd64` |
+            | Windows AMD64 | `pake-native-windows-amd64.exe` |
+          files: release-files/*
+          prerelease: false
+          draft: false

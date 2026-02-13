@@ -3,13 +3,13 @@ import log from 'loglevel';
 import updateNotifier from 'update-notifier';
 import path from 'path';
 import fsExtra from 'fs-extra';
-import { fileURLToPath } from 'url';
-import chalk from 'chalk';
 import prompts from 'prompts';
 import os from 'os';
+import chalk from 'chalk';
 import { execa, execaSync } from 'execa';
 import crypto from 'crypto';
 import ora from 'ora';
+import { fileURLToPath } from 'url';
 import dns from 'dns';
 import http from 'http';
 import { promisify } from 'util';
@@ -137,40 +137,6 @@ var packageJson = {
 	pnpm: pnpm
 };
 
-// Convert the current module URL to a file path
-const currentModulePath = fileURLToPath(import.meta.url);
-// Resolve the parent directory of the current module
-const npmDirectory = path.join(path.dirname(currentModulePath), '..');
-const tauriConfigDirectory = path.join(npmDirectory, 'src-tauri', '.pake');
-
-// Load configs from npm package directory, not from project source
-const tauriSrcDir = path.join(npmDirectory, 'src-tauri');
-const pakeConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'pake.json'));
-const CommonConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'tauri.conf.json'));
-const WinConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'tauri.windows.conf.json'));
-const MacConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'tauri.macos.conf.json'));
-const LinuxConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'tauri.linux.conf.json'));
-const platformConfigs = {
-    win32: WinConf,
-    darwin: MacConf,
-    linux: LinuxConf,
-};
-const { platform: platform$2 } = process;
-// @ts-ignore
-const platformConfig = platformConfigs[platform$2];
-let tauriConfig = {
-    ...CommonConf,
-    bundle: platformConfig.bundle,
-    app: {
-        ...CommonConf.app,
-        trayIcon: {
-            ...(platformConfig?.app?.trayIcon ?? {}),
-        },
-    },
-    build: CommonConf.build,
-    pake: pakeConf,
-};
-
 // Generates an identifier based on the given URL.
 function getIdentifier(url) {
     const postFixHash = crypto
@@ -204,10 +170,16 @@ function getSpinner(text) {
     }).start();
 }
 
-const { platform: platform$1 } = process;
-const IS_MAC = platform$1 === 'darwin';
-const IS_WIN = platform$1 === 'win32';
-const IS_LINUX = platform$1 === 'linux';
+const { platform: platform$2 } = process;
+const IS_MAC = platform$2 === 'darwin';
+const IS_WIN = platform$2 === 'win32';
+const IS_LINUX = platform$2 === 'linux';
+
+// Convert the current module URL to a file path
+const currentModulePath = fileURLToPath(import.meta.url);
+// Resolve the parent directory of the current module
+const npmDirectory = path.join(path.dirname(currentModulePath), '..');
+const tauriConfigDirectory = path.join(npmDirectory, 'src-tauri', '.pake');
 
 async function shellExec(command, timeout = 300000, env) {
     try {
@@ -406,6 +378,150 @@ function checkRustInstalled() {
         return false;
     }
 }
+
+async function mergeNativeConfig(url, options) {
+    const { width, height, name = 'pake-app' } = options;
+    const nativeConfigDir = path.join(npmDirectory, 'src-tauri-native', '.pake');
+    await fsExtra.ensureDir(nativeConfigDir);
+    const config = {
+        url,
+        app_name: name,
+        width,
+        height,
+    };
+    const configPath = path.join(nativeConfigDir, 'native_config.json');
+    await fsExtra.outputJSON(configPath, config, { spaces: 2 });
+}
+
+class NativeBrowserBuilder {
+    constructor(options) {
+        this.options = options;
+    }
+    async prepare() {
+        ensureRustEnv();
+        if (!checkRustInstalled()) {
+            const res = await prompts({
+                type: 'confirm',
+                message: 'Rust not detected. Install now?',
+                name: 'value',
+            });
+            if (res.value) {
+                await installRust();
+            }
+            else {
+                logger.error('✕ Rust required to build native browser app.');
+                process.exit(0);
+            }
+        }
+    }
+    async start(url) {
+        const { name = 'pake-app' } = this.options;
+        await mergeNativeConfig(url, this.options);
+        const manifestPath = path.join(npmDirectory, 'src-tauri-native', 'Cargo.toml');
+        logger.info('Building and running native browser app in dev mode...');
+        const runCommand = `cargo run --manifest-path "${manifestPath}"`;
+        await shellExec(runCommand, 600000);
+    }
+    async build(url) {
+        const { name = 'pake-app' } = this.options;
+        await mergeNativeConfig(url, this.options);
+        const manifestPath = path.join(npmDirectory, 'src-tauri-native', 'Cargo.toml');
+        const buildSpinner = getSpinner('Building native browser app...');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        buildSpinner.stop();
+        logger.warn('✸ Building native browser app...');
+        const buildCommand = `cargo build --release --manifest-path "${manifestPath}"`;
+        await shellExec(buildCommand, 600000);
+        const targetDir = path.join(npmDirectory, 'src-tauri-native', 'target', 'release');
+        const binaryName = IS_WIN ? 'pake-native.exe' : 'pake-native';
+        const sourceBinary = path.join(targetDir, binaryName);
+        if (IS_MAC) {
+            await this.createMacAppBundle(sourceBinary, name);
+        }
+        else {
+            const ext = IS_WIN ? '.exe' : '';
+            const outputPath = path.resolve(`${name}${ext}`);
+            await fsExtra.copy(sourceBinary, outputPath);
+            if (!IS_WIN) {
+                await fsExtra.chmod(outputPath, 0o755);
+            }
+            logger.success('✔ Build success!');
+            logger.success('✔ App binary located in', outputPath);
+        }
+    }
+    async createMacAppBundle(sourceBinary, name) {
+        const appDir = path.resolve(`${name}.app`);
+        const contentsDir = path.join(appDir, 'Contents');
+        const macosDir = path.join(contentsDir, 'MacOS');
+        const resourcesDir = path.join(contentsDir, 'Resources');
+        await fsExtra.ensureDir(macosDir);
+        await fsExtra.ensureDir(resourcesDir);
+        // Copy binary
+        const binaryDest = path.join(macosDir, name);
+        await fsExtra.copy(sourceBinary, binaryDest);
+        await fsExtra.chmod(binaryDest, 0o755);
+        // Generate Info.plist
+        const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>${name}</string>
+  <key>CFBundleIdentifier</key>
+  <string>${this.options.identifier}</string>
+  <key>CFBundleName</key>
+  <string>${name}</string>
+  <key>CFBundleVersion</key>
+  <string>${this.options.appVersion}</string>
+  <key>CFBundleShortVersionString</key>
+  <string>${this.options.appVersion}</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>`;
+        await fsExtra.writeFile(path.join(contentsDir, 'Info.plist'), plist);
+        // Copy icon if provided
+        if (this.options.icon) {
+            const iconPath = path.resolve(this.options.icon);
+            if ((await fsExtra.pathExists(iconPath)) &&
+                iconPath.endsWith('.icns')) {
+                await fsExtra.copy(iconPath, path.join(resourcesDir, 'icon.icns'));
+            }
+        }
+        logger.success('✔ Build success!');
+        logger.success('✔ App bundle located in', appDir);
+    }
+}
+
+// Load configs from npm package directory, not from project source
+const tauriSrcDir = path.join(npmDirectory, 'src-tauri');
+const pakeConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'pake.json'));
+const CommonConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'tauri.conf.json'));
+const WinConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'tauri.windows.conf.json'));
+const MacConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'tauri.macos.conf.json'));
+const LinuxConf = fsExtra.readJSONSync(path.join(tauriSrcDir, 'tauri.linux.conf.json'));
+const platformConfigs = {
+    win32: WinConf,
+    darwin: MacConf,
+    linux: LinuxConf,
+};
+const { platform: platform$1 } = process;
+// @ts-ignore
+const platformConfig = platformConfigs[platform$1];
+let tauriConfig = {
+    ...CommonConf,
+    bundle: platformConfig.bundle,
+    app: {
+        ...CommonConf.app,
+        trayIcon: {
+            ...(platformConfig?.app?.trayIcon ?? {}),
+        },
+    },
+    build: CommonConf.build,
+    pake: pakeConf,
+};
 
 async function combineFiles(files, output) {
     const contents = files.map((file) => {
@@ -1389,6 +1505,9 @@ const buildersMap = {
 };
 class BuilderProvider {
     static create(options) {
+        if (options.native) {
+            return new NativeBrowserBuilder(options);
+        }
         const Builder = buildersMap[platform];
         if (!Builder) {
             throw new Error('The current system is not supported!');
@@ -1941,6 +2060,7 @@ const DEFAULT_PAKE_OPTIONS = {
     minHeight: 0,
     ignoreCertificateErrors: false,
     newWindow: false,
+    native: false,
 };
 
 function validateNumberInput(value) {
@@ -2094,6 +2214,7 @@ ${green('|_|   \\__,_|_|\\_\\___|  can turn any webpage into a desktop app with 
         .addOption(new Option('--new-window', 'Allow new window for third-party login')
         .default(DEFAULT_PAKE_OPTIONS.newWindow)
         .hideHelp())
+        .option('--native', 'Use local Chrome in app mode instead of WebView', DEFAULT_PAKE_OPTIONS.native)
         .version(packageJson.version, '-v, --version')
         .configureHelp({
         sortSubcommands: true,

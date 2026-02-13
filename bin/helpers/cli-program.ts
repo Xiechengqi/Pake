@@ -226,6 +226,11 @@ ${green('|_|   \\__,_|_|\\_\\___|  can turn any webpage into a desktop app with 
         .default(DEFAULT.newWindow)
         .hideHelp(),
     )
+    .option(
+      '--native',
+      'Use local Chrome in app mode instead of WebView',
+      DEFAULT.native,
+    )
     .version(packageJson.version, '-v, --version')
     .configureHelp({
       sortSubcommands: true,

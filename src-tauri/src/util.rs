@@ -24,19 +24,44 @@ pub fn get_pake_config() -> (PakeConfig, Config) {
 }
 
 pub fn get_data_dir(app: &AppHandle, package_name: String) -> PathBuf {
-    {
-        let data_dir = app
-            .path()
-            .config_dir()
-            .expect("Failed to get data dirname")
-            .join(package_name);
+    let base_dir = app
+        .path()
+        .config_dir()
+        .expect("Failed to get data dirname")
+        .join(&package_name);
 
-        if !data_dir.exists() {
-            std::fs::create_dir(&data_dir)
-                .unwrap_or_else(|_| panic!("Can't create dir {}", data_dir.display()));
+    let data_dir = base_dir.join("webview");
+
+    // Migrate existing data: if base_dir exists but webview/ does not,
+    // move existing contents into the webview/ subdirectory.
+    if base_dir.exists() && !data_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&base_dir) {
+            let has_files = entries
+                .filter_map(|e| e.ok())
+                .any(|e| e.file_name() != "chrome");
+            if has_files {
+                let tmp_dir = base_dir.join(".webview_migrate_tmp");
+                if std::fs::create_dir_all(&tmp_dir).is_ok() {
+                    if let Ok(entries) = std::fs::read_dir(&base_dir) {
+                        for entry in entries.filter_map(|e| e.ok()) {
+                            let name = entry.file_name();
+                            if name == ".webview_migrate_tmp" || name == "chrome" {
+                                continue;
+                            }
+                            let _ = std::fs::rename(entry.path(), tmp_dir.join(&name));
+                        }
+                    }
+                    let _ = std::fs::rename(&tmp_dir, &data_dir);
+                }
+            }
         }
-        data_dir
     }
+
+    if !data_dir.exists() {
+        std::fs::create_dir_all(&data_dir)
+            .unwrap_or_else(|_| panic!("Can't create dir {}", data_dir.display()));
+    }
+    data_dir
 }
 
 pub fn show_toast(window: &WebviewWindow, message: &str) {

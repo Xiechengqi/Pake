@@ -117,6 +117,9 @@ export interface PakeCliOptions {
 
   // Allow new window for third-party login, default false
   newWindow: boolean;
+
+  // Use local Chrome in app mode instead of WebView, default false
+  native: boolean;
 }
 
 export interface PakeAppOptions extends PakeCliOptions {
