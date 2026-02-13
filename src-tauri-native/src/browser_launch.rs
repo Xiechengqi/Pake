@@ -76,6 +76,8 @@ pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus
         if std::env::var("WAYLAND_DISPLAY").is_ok() {
             cmd.arg("--ozone-platform=wayland");
         }
+
+        cmd.arg(format!("--class={}", config.app_name));
     }
 
     let mut child = cmd
