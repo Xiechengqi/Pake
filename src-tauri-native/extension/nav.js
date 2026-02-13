@@ -28,6 +28,18 @@
   nav.appendChild(backBtn);
   nav.appendChild(fwdBtn);
   nav.appendChild(reloadBtn);
+
+  if (window.opener) {
+    var closeBtn = document.createElement("button");
+    closeBtn.textContent = "\u2715";
+    closeBtn.title = "Close (Alt+W)";
+    closeBtn.className = "pake-close";
+    closeBtn.addEventListener("click", function () {
+      window.close();
+    });
+    nav.appendChild(closeBtn);
+  }
+
   if (document.body) {
     document.body.appendChild(nav);
   }
@@ -42,6 +54,9 @@
     } else if (e.key === "F5" || (e.ctrlKey && e.key === "r")) {
       e.preventDefault();
       location.reload();
+    } else if (e.altKey && e.key === "w" && window.opener) {
+      e.preventDefault();
+      window.close();
     }
   });
 })();

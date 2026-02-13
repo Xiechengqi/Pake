@@ -39,6 +39,11 @@
   background: rgba(0, 0, 0, 0.14);
 }
 
+#pake-nav button.pake-close:hover {
+  background: rgba(220, 38, 38, 0.8);
+  color: #fff;
+}
+
 @media (prefers-color-scheme: dark) {
   #pake-nav {
     background: rgba(40, 40, 40, 0.78);
@@ -55,5 +60,10 @@
 
   #pake-nav button:active {
     background: rgba(255, 255, 255, 0.18);
+  }
+
+  #pake-nav button.pake-close:hover {
+    background: rgba(220, 38, 38, 0.8);
+    color: #fff;
   }
 }

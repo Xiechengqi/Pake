@@ -1,6 +1,7 @@
 mod browser_detect;
 mod browser_launch;
 mod config;
+mod desktop_entry;
 mod extension;
 
 use std::process;

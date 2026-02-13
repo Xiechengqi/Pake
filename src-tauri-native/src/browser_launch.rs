@@ -3,6 +3,7 @@ use std::process::{Command, ExitStatus, Stdio};
 
 use crate::browser_detect::BrowserInfo;
 use crate::config::NativeBrowserConfig;
+use crate::desktop_entry;
 use crate::extension;
 
 fn get_data_dir(config: &NativeBrowserConfig, browser: &BrowserInfo) -> PathBuf {
@@ -77,7 +78,7 @@ pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus
             cmd.arg("--ozone-platform=wayland");
         }
 
-        cmd.arg(format!("--class={}", config.app_name));
+        desktop_entry::install(config, browser);
     }
 
     let mut child = cmd
