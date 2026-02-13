@@ -75,6 +75,18 @@ pub fn detect_browser() -> Option<BrowserInfo> {
 }
 
 #[cfg(target_os = "linux")]
+fn is_snap_binary(path: &PathBuf) -> bool {
+    if path.starts_with("/snap/") {
+        return true;
+    }
+    // Some distros have wrapper scripts at /usr/bin/chromium-browser that exec /snap/bin/chromium
+    if let Ok(content) = std::fs::read_to_string(path) {
+        return content.contains("/snap/bin/");
+    }
+    false
+}
+
+#[cfg(target_os = "linux")]
 pub fn detect_browser() -> Option<BrowserInfo> {
     // Chrome first, then Chromium
     let candidates = [
@@ -84,7 +96,7 @@ pub fn detect_browser() -> Option<BrowserInfo> {
     for (name, bins) in &candidates {
         for bin in *bins {
             if let Ok(path) = which::which(bin) {
-                let is_snap = path.starts_with("/snap/");
+                let is_snap = is_snap_binary(&path);
                 return Some(BrowserInfo { name: name.to_string(), path, is_snap });
             }
         }
