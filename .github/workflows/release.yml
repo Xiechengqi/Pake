@@ -26,11 +26,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            asset: pake-native-linux-amd64
-          - target: aarch64-unknown-linux-gnu
-            asset: pake-native-linux-arm64
-    runs-on: ubuntu-latest
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            asset: pake-native-linux-amd64-ubuntu22
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            asset: pake-native-linux-arm64-ubuntu22
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            asset: pake-native-linux-amd64-ubuntu24
+          - os: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+            asset: pake-native-linux-arm64-ubuntu24
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -48,11 +56,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
-
-      - name: Verify toolchain
-        run: |
-          rustup show
-          rustup target list --installed
 
       - name: Create build config
         run: |
@@ -194,8 +197,10 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | Linux AMD64 | `pake-native-linux-amd64` |
-            | Linux ARM64 | `pake-native-linux-arm64` |
+            | Linux AMD64 (Ubuntu 22.04) | `pake-native-linux-amd64-ubuntu22` |
+            | Linux ARM64 (Ubuntu 22.04) | `pake-native-linux-arm64-ubuntu22` |
+            | Linux AMD64 (Ubuntu 24.04) | `pake-native-linux-amd64-ubuntu24` |
+            | Linux ARM64 (Ubuntu 24.04) | `pake-native-linux-arm64-ubuntu24` |
             | macOS ARM64 (Apple Silicon) | `pake-native-macos-arm64` |
             | macOS AMD64 (Intel) | `pake-native-macos-amd64` |
             | Windows AMD64 | `pake-native-windows-amd64.exe` |
