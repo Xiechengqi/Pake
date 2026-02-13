@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'src-tauri-native/**'
+      - '.github/workflows/release.yml'
   workflow_dispatch:
     inputs:
       build_native:
