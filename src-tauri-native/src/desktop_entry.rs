@@ -11,7 +11,13 @@ fn chrome_app_id(url: &str) -> String {
         .strip_prefix("https://")
         .or_else(|| url.strip_prefix("http://"))
         .unwrap_or(url);
-    let sanitized = stripped.replace('/', "_").trim_end_matches('_').to_string();
+    // Chrome normalizes the URL (appends trailing /) then replaces each '/' with '__'
+    let with_slash = if stripped.ends_with('/') {
+        stripped.to_string()
+    } else {
+        format!("{}/", stripped)
+    };
+    let sanitized = with_slash.replace('/', "__");
     format!("chrome-{}-Default", sanitized)
 }
 
