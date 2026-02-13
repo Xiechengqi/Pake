@@ -414,14 +414,6 @@ class NativeBrowserBuilder {
             }
         }
     }
-    async start(url) {
-        const { name = 'pake-app' } = this.options;
-        await mergeNativeConfig(url, this.options);
-        const manifestPath = path.join(npmDirectory, 'src-tauri-native', 'Cargo.toml');
-        logger.info('Building and running native browser app in dev mode...');
-        const runCommand = `cargo run --manifest-path "${manifestPath}"`;
-        await shellExec(runCommand, 600000);
-    }
     async build(url) {
         const { name = 'pake-app' } = this.options;
         await mergeNativeConfig(url, this.options);
