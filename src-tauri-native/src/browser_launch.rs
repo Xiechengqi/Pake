@@ -3,20 +3,37 @@ use std::process::{Command, ExitStatus};
 
 use crate::browser_detect::BrowserInfo;
 use crate::config::NativeBrowserConfig;
+use crate::extension;
 
 fn get_data_dir(config: &NativeBrowserConfig, browser: &BrowserInfo) -> PathBuf {
-    // Snap-packaged browsers can only write to ~/snap/<name>/common/
+    let config_dir = dirs::config_dir().expect("Failed to resolve config directory");
+    let logical_dir = config_dir.join(&config.app_name).join(&browser.name);
+
     if browser.is_snap {
+        // Snap browsers can only write to ~/snap/<name>/common/
+        // Create the real dir there, then symlink from the logical path
         let home = dirs::home_dir().expect("Failed to resolve home directory for snap data dir");
-        return home
+        let snap_dir = home
             .join("snap")
             .join(&browser.name)
             .join("common")
             .join("pake")
             .join(&config.app_name);
+        std::fs::create_dir_all(&snap_dir).expect("Failed to create snap data directory");
+
+        // Create symlink: ~/.config/<app>/<browser> -> ~/snap/<browser>/common/pake/<app>
+        let parent = logical_dir.parent().unwrap();
+        std::fs::create_dir_all(parent).expect("Failed to create config directory");
+        if !logical_dir.exists() {
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&snap_dir, &logical_dir)
+                .unwrap_or_else(|e| eprintln!("Warning: failed to create symlink: {}", e));
+        }
+
+        return snap_dir;
     }
-    let config_dir = dirs::config_dir().expect("Failed to resolve config directory");
-    config_dir.join(&config.app_name).join(&browser.name)
+
+    logical_dir
 }
 
 pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus {
@@ -31,7 +48,10 @@ pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus
         .arg(&window_size)
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
-        .arg("--disable-extensions");
+        .arg(format!(
+            "--load-extension={}",
+            extension::ensure_extension(&data_dir).display()
+        ));
 
     // Running as root on Linux requires --no-sandbox
     // Auto-detect Wayland vs X11 display server
