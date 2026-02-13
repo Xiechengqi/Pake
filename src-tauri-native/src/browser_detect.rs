@@ -79,9 +79,14 @@ fn is_snap_binary(path: &PathBuf) -> bool {
     if path.starts_with("/snap/") {
         return true;
     }
-    // Some distros have wrapper scripts at /usr/bin/chromium-browser that exec /snap/bin/chromium
-    if let Ok(content) = std::fs::read_to_string(path) {
-        return content.contains("/snap/bin/");
+    // Some distros have wrapper scripts at /usr/bin/chromium-browser that exec /snap/bin/chromium.
+    // Only read small files (scripts) to avoid reading large ELF binaries.
+    if let Ok(meta) = std::fs::metadata(path) {
+        if meta.len() < 65536 {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                return content.contains("/snap/bin/");
+            }
+        }
     }
     false
 }

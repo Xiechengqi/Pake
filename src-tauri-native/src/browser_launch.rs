@@ -7,15 +7,13 @@ use crate::config::NativeBrowserConfig;
 fn get_data_dir(config: &NativeBrowserConfig, browser: &BrowserInfo) -> PathBuf {
     // Snap-packaged browsers can only write to ~/snap/<name>/common/
     if browser.is_snap {
-        if let Some(home) = dirs::home_dir() {
-            // e.g. ~/snap/chromium/common/pake/XiaoHongShu
-            return home
-                .join("snap")
-                .join(&browser.name)
-                .join("common")
-                .join("pake")
-                .join(&config.app_name);
-        }
+        let home = dirs::home_dir().expect("Failed to resolve home directory for snap data dir");
+        return home
+            .join("snap")
+            .join(&browser.name)
+            .join("common")
+            .join("pake")
+            .join(&config.app_name);
     }
     let config_dir = dirs::config_dir().expect("Failed to resolve config directory");
     config_dir.join(&config.app_name).join(&browser.name)

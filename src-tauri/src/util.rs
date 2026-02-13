@@ -38,14 +38,17 @@ pub fn get_data_dir(app: &AppHandle, package_name: String) -> PathBuf {
         if let Ok(entries) = std::fs::read_dir(&base_dir) {
             let has_files = entries
                 .filter_map(|e| e.ok())
-                .any(|e| e.file_name() != "chrome");
+                .any(|e| {
+                    let name = e.file_name();
+                    name != "chrome" && name != "chromium"
+                });
             if has_files {
                 let tmp_dir = base_dir.join(".webview_migrate_tmp");
                 if std::fs::create_dir_all(&tmp_dir).is_ok() {
                     if let Ok(entries) = std::fs::read_dir(&base_dir) {
                         for entry in entries.filter_map(|e| e.ok()) {
                             let name = entry.file_name();
-                            if name == ".webview_migrate_tmp" || name == "chrome" {
+                            if name == ".webview_migrate_tmp" || name == "chrome" || name == "chromium" {
                                 continue;
                             }
                             let _ = std::fs::rename(entry.path(), tmp_dir.join(&name));
