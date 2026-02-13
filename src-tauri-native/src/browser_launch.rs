@@ -1,20 +1,21 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, ExitStatus};
 
+use crate::browser_detect::BrowserInfo;
 use crate::config::NativeBrowserConfig;
 
-fn get_data_dir(config: &NativeBrowserConfig) -> PathBuf {
+fn get_data_dir(config: &NativeBrowserConfig, browser_name: &str) -> PathBuf {
     let config_dir = dirs::config_dir().expect("Failed to resolve config directory");
-    config_dir.join(&config.app_name).join("chrome")
+    config_dir.join(&config.app_name).join(browser_name)
 }
 
-pub fn launch(chrome_path: &Path, config: &NativeBrowserConfig) -> ExitStatus {
-    let data_dir = get_data_dir(config);
-    std::fs::create_dir_all(&data_dir).expect("Failed to create chrome data directory");
+pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus {
+    let data_dir = get_data_dir(config, &browser.name);
+    std::fs::create_dir_all(&data_dir).expect("Failed to create browser data directory");
 
     let window_size = format!("--window-size={},{}", config.width, config.height);
 
-    let mut child = Command::new(chrome_path)
+    let mut child = Command::new(&browser.path)
         .arg(format!("--app={}", config.url))
         .arg(format!("--user-data-dir={}", data_dir.display()))
         .arg(&window_size)
@@ -22,7 +23,7 @@ pub fn launch(chrome_path: &Path, config: &NativeBrowserConfig) -> ExitStatus {
         .arg("--no-default-browser-check")
         .arg("--disable-extensions")
         .spawn()
-        .expect("Failed to launch Chrome");
+        .unwrap_or_else(|e| panic!("Failed to launch {}: {}", browser.name, e));
 
-    child.wait().expect("Failed to wait for Chrome process")
+    child.wait().unwrap_or_else(|e| panic!("Failed to wait for {} process: {}", browser.name, e))
 }
