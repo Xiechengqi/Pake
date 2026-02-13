@@ -15,13 +15,31 @@ pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus
 
     let window_size = format!("--window-size={},{}", config.width, config.height);
 
-    let mut child = Command::new(&browser.path)
-        .arg(format!("--app={}", config.url))
+    let mut cmd = Command::new(&browser.path);
+    cmd.arg(format!("--app={}", config.url))
         .arg(format!("--user-data-dir={}", data_dir.display()))
         .arg(&window_size)
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
-        .arg("--disable-extensions")
+        .arg("--disable-extensions");
+
+    // Running as root on Linux requires --no-sandbox
+    #[cfg(target_os = "linux")]
+    {
+        let is_root = std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|s| {
+                s.lines()
+                    .find(|l| l.starts_with("Uid:"))
+                    .map(|l| l.split_whitespace().nth(1) == Some("0"))
+            })
+            .unwrap_or(false);
+        if is_root {
+            cmd.arg("--no-sandbox");
+        }
+    }
+
+    let mut child = cmd
         .spawn()
         .unwrap_or_else(|e| panic!("Failed to launch {}: {}", browser.name, e));
 
