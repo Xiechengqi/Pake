@@ -70,6 +70,18 @@ pake https://www.xiaohongshu.com/explore --native --name XiaoHongShu
 - 如果未安装 Chrome，运行时会提示错误并以退出码 127 退出
 - macOS 上会自动生成 `.app` 包，Windows/Linux 生成独立可执行文件
 
+### Ubuntu Server 安装 Chromium
+
+Ubuntu Server 没有预装浏览器，需要手动安装：
+
+```bash
+# Ubuntu 22.04 / 24.04（snap 方式，默认）
+sudo snap install chromium
+
+# 如果无法使用 snap（容器/WSL 等环境），使用 apt
+sudo apt update && sudo apt install -y chromium-browser
+```
+
 ## 定制开发
 
 需要 Rust `>=1.85` 和 Node `>=22`，详细安装指南参考 [Tauri 文档](https://tauri.app/start/prerequisites/)。
