@@ -24,6 +24,19 @@ pub fn get_pake_config() -> (PakeConfig, Config) {
 }
 
 pub fn get_data_dir(app: &AppHandle, package_name: String) -> PathBuf {
+    // Support --data-dir <path> command line argument
+    let args: Vec<String> = env::args().collect();
+    if let Some(pos) = args.iter().position(|a| a == "--data-dir") {
+        if let Some(custom_dir) = args.get(pos + 1) {
+            let data_dir = PathBuf::from(custom_dir);
+            if !data_dir.exists() {
+                std::fs::create_dir_all(&data_dir)
+                    .unwrap_or_else(|_| panic!("Can't create dir {}", data_dir.display()));
+            }
+            return data_dir;
+        }
+    }
+
     let base_dir = app
         .path()
         .config_dir()

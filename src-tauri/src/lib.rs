@@ -21,7 +21,23 @@ use app::{
 };
 use util::get_pake_config;
 
+fn print_help() {
+    let args: Vec<String> = std::env::args().collect();
+    let bin = args.first().map(|s| s.as_str()).unwrap_or("pake");
+    println!("Usage: {} [OPTIONS]", bin);
+    println!();
+    println!("Options:");
+    println!("  --data-dir <PATH>  Set custom data directory path");
+    println!("  -h, --help         Print this help message");
+}
+
 pub fn run_app() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "-h" || a == "--help") {
+        print_help();
+        std::process::exit(0);
+    }
+
     #[cfg(target_os = "linux")]
     {
         if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
