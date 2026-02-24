@@ -38,7 +38,11 @@ fn get_data_dir(config: &NativeBrowserConfig, browser: &BrowserInfo) -> PathBuf 
 }
 
 pub fn launch(browser: &BrowserInfo, config: &NativeBrowserConfig) -> ExitStatus {
-    let data_dir = get_data_dir(config, browser);
+    let data_dir = if let Some(ref custom) = config.data_dir {
+        PathBuf::from(custom)
+    } else {
+        get_data_dir(config, browser)
+    };
     std::fs::create_dir_all(&data_dir).expect("Failed to create browser data directory");
 
     let window_size = format!("--window-size={},{}", config.width, config.height);

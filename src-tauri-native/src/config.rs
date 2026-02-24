@@ -7,6 +7,7 @@ pub struct NativeBrowserConfig {
     pub app_name: String,
     pub width: u32,
     pub height: u32,
+    pub data_dir: Option<String>,
 }
 
 pub fn load_config() -> NativeBrowserConfig {
@@ -15,9 +16,15 @@ pub fn load_config() -> NativeBrowserConfig {
     // Parse CLI args: pake-native <url> [--name <name>] [--width <w>] [--height <h>]
     let cli_url = args.get(1).filter(|a| !a.starts_with("--")).cloned();
 
+    if args.iter().any(|a| a == "-h" || a == "--help") {
+        print_usage();
+        std::process::exit(0);
+    }
+
     let cli_name = find_arg(&args, "--name");
     let cli_width = find_arg(&args, "--width").and_then(|v| v.parse().ok());
     let cli_height = find_arg(&args, "--height").and_then(|v| v.parse().ok());
+    let cli_data_dir = find_arg(&args, "--data-dir");
 
     // Embedded defaults from compile time
     let defaults: NativeBrowserConfig =
@@ -35,7 +42,7 @@ pub fn load_config() -> NativeBrowserConfig {
         std::process::exit(1);
     }
 
-    NativeBrowserConfig { url, app_name, width, height }
+    NativeBrowserConfig { url, app_name, width, height, data_dir: cli_data_dir }
 }
 
 fn find_arg(args: &[String], flag: &str) -> Option<String> {
@@ -52,6 +59,8 @@ fn print_usage() {
     eprintln!("  --name <string>    Application name (default: Pake)");
     eprintln!("  --width <number>   Window width (default: 1200)");
     eprintln!("  --height <number>  Window height (default: 780)");
+    eprintln!("  --data-dir <PATH>  Set custom data directory path");
+    eprintln!("  -h, --help         Print this help message");
     eprintln!();
     eprintln!("Example:");
     eprintln!("  pake https://x.com/ --name X");
