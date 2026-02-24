@@ -4,24 +4,68 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'src-tauri-native/**'
-      - '.github/workflows/release.yml'
   workflow_dispatch:
-    inputs:
-      build_native:
-        description: "Build pake-native (all platforms)"
-        type: boolean
-        default: false
 
 permissions:
   contents: write
 
 jobs:
+  build-tauri-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            asset: pake-linux-amd64-ubuntu22
+          - os: ubuntu-24.04
+            asset: pake-linux-amd64-ubuntu24
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Create frontend dist
+        run: mkdir -p dist && echo '<html></html>' > dist/index.html
+
+      - name: Build Tauri app
+        run: |
+          cd src-tauri
+          cargo build --release
+          cd ..
+
+      - name: Prepare release asset
+        run: |
+          cp src-tauri/target/release/pake ${{ matrix.asset }}
+          chmod +x ${{ matrix.asset }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
   build-native-linux:
-    if: >-
-      (github.event_name == 'push') ||
-      (github.event_name == 'workflow_dispatch' && inputs.build_native)
     strategy:
       fail-fast: false
       matrix:
@@ -80,71 +124,18 @@ jobs:
           name: ${{ matrix.asset }}
           path: ${{ matrix.asset }}
 
-  build-native-extras:
-    if: github.event_name == 'workflow_dispatch' && inputs.build_native
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            asset: pake-native-macos-arm64
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            asset: pake-native-macos-amd64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            asset: pake-native-windows-amd64.exe
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Create build config
-        shell: bash
-        run: |
-          mkdir -p src-tauri-native/.pake
-          echo '{"url":"https://example.com","app_name":"PakeNative","width":1200,"height":780}' > src-tauri-native/.pake/native_config.json
-
-      - name: Build
-        shell: bash
-        run: cargo build --release --manifest-path src-tauri-native/Cargo.toml --target ${{ matrix.target }}
-
-      - name: Prepare release asset
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cp src-tauri-native/target/${{ matrix.target }}/release/pake-native.exe ${{ matrix.asset }}
-          else
-            cp src-tauri-native/target/${{ matrix.target }}/release/pake-native ${{ matrix.asset }}
-            chmod +x ${{ matrix.asset }}
-          fi
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset }}
-          path: ${{ matrix.asset }}
-
-  release-native:
-    needs: [build-native-linux, build-native-extras]
-    if: always() && needs.build-native-linux.result == 'success'
+  release:
+    needs: [build-tauri-linux, build-native-linux]
+    if: always() && (needs.build-tauri-linux.result == 'success' || needs.build-native-linux.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download all native artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: pake-native-*
+          pattern: pake-*
           path: artifacts
 
       - name: Prepare release files
@@ -153,16 +144,10 @@ jobs:
           find artifacts -type f -exec cp {} release-files/ \;
           ls -lh release-files/
 
-      - name: Get version
-        id: version
+      - name: Delete existing latest release
         run: |
-          VERSION=$(grep '^version = ' src-tauri-native/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Delete existing native-latest release
-        run: |
-          gh release delete native-latest --yes || true
-          git push origin :refs/tags/native-latest || true
+          gh release delete latest --yes || true
+          git push origin :refs/tags/latest || true
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -170,40 +155,34 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -f native-latest
-          git push -f origin native-latest
+          git tag -f latest
+          git push -f origin latest
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: native-latest
-          name: "Pake Native v${{ steps.version.outputs.version }}"
+          tag_name: latest
+          name: "latest"
           body: |
-            ## Pake Native Browser Build
+            ## Pake Latest Build
 
-            **Version**: ${{ steps.version.outputs.version }}
             **Commit**: ${{ github.sha }}
-            **Build time**: ${{ github.event.head_commit.timestamp }}
-
-            ### Changes
-
-            ${{ github.event.head_commit.message }}
-
-            ---
 
             ### Downloads
 
-            > Linux builds are always included. macOS/Windows builds are only available when manually triggered with "Build pake-native (all platforms)" enabled.
+            #### Pake (Tauri WebView)
+            | Platform | File |
+            |----------|------|
+            | Linux AMD64 (Ubuntu 22.04) | `pake-linux-amd64-ubuntu22` |
+            | Linux AMD64 (Ubuntu 24.04) | `pake-linux-amd64-ubuntu24` |
 
+            #### Pake Native (System Browser)
             | Platform | File |
             |----------|------|
             | Linux AMD64 (Ubuntu 22.04) | `pake-native-linux-amd64-ubuntu22` |
             | Linux ARM64 (Ubuntu 22.04) | `pake-native-linux-arm64-ubuntu22` |
             | Linux AMD64 (Ubuntu 24.04) | `pake-native-linux-amd64-ubuntu24` |
             | Linux ARM64 (Ubuntu 24.04) | `pake-native-linux-arm64-ubuntu24` |
-            | macOS ARM64 (Apple Silicon) | `pake-native-macos-arm64` |
-            | macOS AMD64 (Intel) | `pake-native-macos-amd64` |
-            | Windows AMD64 | `pake-native-windows-amd64.exe` |
           files: release-files/*
           prerelease: false
           draft: false
