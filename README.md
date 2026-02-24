@@ -75,8 +75,10 @@ pake https://www.xiaohongshu.com/explore --native --name XiaoHongShu
 Ubuntu Server 没有预装浏览器，需要手动安装：
 
 ```bash
-# Ubuntu 22.04 / 24.04（snap 方式，默认）
-sudo snap install chromium
+# Ubuntu 22.04 / 24.04
+sudo add-apt-repository ppa:xtradeb/apps
+sudo apt update
+sudo apt install chromium
 
 # 如果无法使用 snap（容器/WSL 等环境），使用 apt
 sudo apt update && sudo apt install -y chromium-browser
