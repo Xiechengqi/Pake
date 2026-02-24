@@ -17,8 +17,8 @@ jobs:
         include:
           - os: ubuntu-22.04
             asset: pake-linux-amd64-ubuntu22
-          - os: ubuntu-24.04
-            asset: pake-linux-amd64-ubuntu24
+          # - os: ubuntu-24.04
+          #   asset: pake-linux-amd64-ubuntu24
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -73,15 +73,15 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             asset: pake-native-linux-amd64-ubuntu22
-          - os: ubuntu-22.04
-            target: aarch64-unknown-linux-gnu
-            asset: pake-native-linux-arm64-ubuntu22
-          - os: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-            asset: pake-native-linux-amd64-ubuntu24
-          - os: ubuntu-24.04
-            target: aarch64-unknown-linux-gnu
-            asset: pake-native-linux-arm64-ubuntu24
+          # - os: ubuntu-22.04
+          #   target: aarch64-unknown-linux-gnu
+          #   asset: pake-native-linux-arm64-ubuntu22
+          # - os: ubuntu-24.04
+          #   target: x86_64-unknown-linux-gnu
+          #   asset: pake-native-linux-amd64-ubuntu24
+          # - os: ubuntu-24.04
+          #   target: aarch64-unknown-linux-gnu
+          #   asset: pake-native-linux-arm64-ubuntu24
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -174,15 +174,11 @@ jobs:
             | Platform | File |
             |----------|------|
             | Linux AMD64 (Ubuntu 22.04) | `pake-linux-amd64-ubuntu22` |
-            | Linux AMD64 (Ubuntu 24.04) | `pake-linux-amd64-ubuntu24` |
 
             #### Pake Native (System Browser)
             | Platform | File |
             |----------|------|
             | Linux AMD64 (Ubuntu 22.04) | `pake-native-linux-amd64-ubuntu22` |
-            | Linux ARM64 (Ubuntu 22.04) | `pake-native-linux-arm64-ubuntu22` |
-            | Linux AMD64 (Ubuntu 24.04) | `pake-native-linux-amd64-ubuntu24` |
-            | Linux ARM64 (Ubuntu 24.04) | `pake-native-linux-arm64-ubuntu24` |
           files: release-files/*
           prerelease: false
           draft: false
