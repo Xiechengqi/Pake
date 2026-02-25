@@ -5,17 +5,14 @@ use crate::config::NativeBrowserConfig;
 
 /// Reproduce Chrome's WM_CLASS for `--app=<url>` on Linux.
 ///
-/// Chrome builds the application name via (see Chromium source
-/// `web_app_helpers.cc`):
+/// Chrome builds the application name via (Chromium `web_app_helpers.cc`):
 ///   GenerateApplicationNameFromURL(url) = host + "_" + path
-///
-/// Then `GetWMClassFromAppName` replaces illegal path characters
-/// (including '/') with '_' and trims leading/trailing underscores.
-///
-/// Finally the WM_CLASS is:  "chrome-" + app_name + "-Default"
+/// then replaces '/' with '_' to form the WM_CLASS:
+///   "chrome-" + sanitized_name + "-Default"
 ///
 /// Examples:
 ///   https://gmail.com       -> chrome-gmail.com__-Default
+///   https://mail.google.com -> chrome-mail.google.com__-Default
 ///   https://godaddy.com/en  -> chrome-godaddy.com__en-Default
 fn chrome_app_id(url: &str) -> String {
     let stripped = url
@@ -30,17 +27,9 @@ fn chrome_app_id(url: &str) -> String {
     };
 
     // Chrome: base::StrCat({url.host(), "_", url.path()})
-    let app_name = format!("{}_{}", host, path);
-
-    // Chrome: ReplaceIllegalCharactersInPath replaces '/' (and other
-    // illegal chars) with '_', then trims leading/trailing '_'.
-    let sanitized: String = app_name
-        .chars()
-        .map(|c| if c == '/' { '_' } else { c })
-        .collect();
-    let trimmed = sanitized.trim_matches('_');
-
-    format!("chrome-{}-Default", trimmed)
+    // Then '/' in the path is replaced with '_'.
+    let sanitized_path = path.replace('/', "_");
+    format!("chrome-{}_{}-Default", host, sanitized_path)
 }
 
 /// Install a .desktop file so the taskbar shows the app name instead of
