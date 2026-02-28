@@ -55,6 +55,29 @@ pake https://www.xiaohongshu.com/explore --native --name XiaoHongShu
 | 依赖 | 无额外依赖 | 需要安装 Chrome |
 | 功能 | 完整（托盘、快捷键、菜单等） | 基础（窗口启动） |
 
+### WebView 模式运行时参数（Linux）
+
+在 Linux 上，WebView 模式编译出的二进制支持通过命令行参数覆盖内嵌的默认配置，无需重新编译即可打开不同网站：
+
+```bash
+# 编译一次
+pnpm run build
+
+# 用不同参数运行
+./src-tauri/target/release/pake --url https://x.com --name X
+./src-tauri/target/release/pake --url https://github.com --name GitHub --width 1400 --height 900
+./src-tauri/target/release/pake --url https://weekly.tw93.fun  # 使用内嵌默认值
+```
+
+| 参数 | 说明 |
+|---|---|
+| `--url <URL>` | 覆盖目标网址 |
+| `--name <STRING>` | 覆盖应用名称 |
+| `--width <NUMBER>` | 覆盖窗口宽度 |
+| `--height <NUMBER>` | 覆盖窗口高度 |
+| `--data-dir <PATH>` | 自定义数据目录 |
+| `-h, --help` | 显示帮助信息 |
+
 ### 数据目录
 
 两种模式使用独立的数据目录，互不干扰：
