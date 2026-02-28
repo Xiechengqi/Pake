@@ -27,6 +27,10 @@ fn print_help() {
     println!("Usage: {} [OPTIONS]", bin);
     println!();
     println!("Options:");
+    println!("  --url <URL>        Override the target URL");
+    println!("  --name <STRING>    Override the application name");
+    println!("  --width <NUMBER>   Override the window width");
+    println!("  --height <NUMBER>  Override the window height");
     println!("  --data-dir <PATH>  Set custom data directory path");
     println!("  -h, --help         Print this help message");
 }

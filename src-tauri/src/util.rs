@@ -5,22 +5,62 @@ use tauri::{AppHandle, Config, Manager, WebviewWindow};
 
 pub fn get_pake_config() -> (PakeConfig, Config) {
     #[cfg(feature = "cli-build")]
-    let pake_config: PakeConfig = serde_json::from_str(include_str!("../.pake/pake.json"))
+    #[allow(unused_mut)]
+    let mut pake_config: PakeConfig = serde_json::from_str(include_str!("../.pake/pake.json"))
         .expect("Failed to parse pake config");
 
     #[cfg(not(feature = "cli-build"))]
-    let pake_config: PakeConfig =
+    #[allow(unused_mut)]
+    let mut pake_config: PakeConfig =
         serde_json::from_str(include_str!("../pake.json")).expect("Failed to parse pake config");
 
     #[cfg(feature = "cli-build")]
-    let tauri_config: Config = serde_json::from_str(include_str!("../.pake/tauri.conf.json"))
+    #[allow(unused_mut)]
+    let mut tauri_config: Config = serde_json::from_str(include_str!("../.pake/tauri.conf.json"))
         .expect("Failed to parse tauri config");
 
     #[cfg(not(feature = "cli-build"))]
-    let tauri_config: Config = serde_json::from_str(include_str!("../tauri.conf.json"))
+    #[allow(unused_mut)]
+    let mut tauri_config: Config = serde_json::from_str(include_str!("../tauri.conf.json"))
         .expect("Failed to parse tauri config");
 
+    // Override embedded defaults with CLI arguments (Linux only)
+    #[cfg(target_os = "linux")]
+    {
+        let args: Vec<String> = env::args().collect();
+
+        if let Some(url) = find_arg(&args, "--url") {
+            if !pake_config.windows.is_empty() {
+                pake_config.windows[0].url = url;
+            }
+        }
+
+        if let Some(name) = find_arg(&args, "--name") {
+            tauri_config.product_name = Some(name);
+        }
+
+        if let Some(width) = find_arg(&args, "--width").and_then(|v| v.parse().ok()) {
+            if !pake_config.windows.is_empty() {
+                pake_config.windows[0].width = width;
+            }
+        }
+
+        if let Some(height) = find_arg(&args, "--height").and_then(|v| v.parse().ok()) {
+            if !pake_config.windows.is_empty() {
+                pake_config.windows[0].height = height;
+            }
+        }
+    }
+
     (pake_config, tauri_config)
+}
+
+#[cfg(target_os = "linux")]
+fn find_arg(args: &[String], flag: &str) -> Option<String> {
+    args.iter()
+        .position(|a| a == flag)
+        .and_then(|i| args.get(i + 1))
+        .cloned()
 }
 
 pub fn get_data_dir(app: &AppHandle, package_name: String) -> PathBuf {
